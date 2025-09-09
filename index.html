@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Whale of the Wild - Family Tree</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        :root {
+            --bg-dark: #0a192f;
+            --bg-node: #112240;
+            --border-line: #233554;
+            --text-light: #ccd6f6;
+            --text-medium: #8892b0;
+            --text-accent: #64ffda;
+            --text-selection: #f5a623;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            padding: 2rem;
+            overflow-x: hidden;
+        }
+        .tree-wrapper {
+            display: flex;
+            justify-content: center;
+            overflow-x: auto;
+            padding: 2rem 0;
+        }
+        .tree ul, .tree li { position: relative; margin: 0; padding: 0; list-style-type: none; }
+        .tree ul { display: flex; padding-top: 70px; }
+        .tree li { display: flex; flex-direction: column; align-items: center; padding: 0 10px; }
+        .node {
+            padding: 12px 24px;
+            background-color: var(--bg-node);
+            border: 2px solid var(--border-line);
+            border-radius: 6px;
+            font-weight: 500;
+            text-align: center;
+            min-width: 140px;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        .node-icon { font-size: 1.5rem; line-height: 1; }
+        .node:hover { transform: translateY(-3px); border-color: var(--text-accent); }
+        .node.is-vega { color: var(--text-accent); border-color: var(--text-accent); }
+        .node.is-lost { color: var(--text-medium); text-decoration: line-through; opacity: 0.7; }
+        .node.selected {
+            border-color: var(--text-selection);
+            box-shadow: 0 0 20px rgba(245, 166, 35, 0.5);
+            transform: translateY(-3px);
+        }
+        .tree li::before {
+            content: ''; position: absolute; top: -35px; left: 50%;
+            transform: translateX(-50%); width: 2px; height: 35px; background-color: var(--border-line);
+        }
+        .tree li::after {
+            content: ''; position: absolute; top: -35px; height: 2px;
+            background-color: var(--border-line); width: 100%;
+        }
+        .tree > li::before, .tree > li::after { display: none; }
+        .tree ul li:only-child::after { display: none; }
+        .tree ul li:first-child::after { left: 50%; width: 50%; }
+        .tree ul li:last-child::after { left: 0; width: 50%; }
+        .relationship-label {
+            position: absolute; top: -55px; left: 50%;
+            transform: translateX(-50%); font-size: 0.75rem; color: var(--text-medium);
+            background-color: var(--bg-dark); padding: 0 5px; white-space: nowrap;
+        }
+        .section-title {
+            text-align: center; font-size: 1.5rem; font-weight: 700; color: var(--text-accent);
+            margin-top: 4rem; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-line);
+        }
+        #character-tooltip, .banner-container {
+            position: fixed; z-index: 100;
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        #character-tooltip {
+            background-color: var(--bg-node); border: 1px solid var(--text-accent);
+            border-radius: 8px; width: 300px; padding: 1.25rem;
+            opacity: 0; visibility: hidden; pointer-events: none;
+            transform: scale(0.95);
+        }
+        #character-tooltip.visible {
+            opacity: 1; visibility: visible; transform: scale(1);
+        }
+        .tooltip-icon { font-size: 2.5rem; float: left; margin-right: 1rem; }
+        .banner-container {
+            top: 2rem; left: 0; width: 100%; display: none;
+            align-items: flex-start; justify-content: center; pointer-events: none;
+        }
+        .banner {
+            background-color: var(--bg-node); padding: 1rem 1.5rem; border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); font-weight: 500;
+            display: flex; align-items: center; gap: 1rem; pointer-events: auto;
+            max-width: 90%; color: var(--text-selection);
+            border: 1px solid var(--text-selection);
+        }
+        .close-banner {
+            font-size: 1.5rem; line-height: 1; cursor: pointer; color: var(--text-medium);
+            transition: color 0.2s;
+        }
+        .close-banner:hover { color: var(--text-light); }
+    </style>
+</head>
+<body>
+    <header class="text-center mb-4">
+        <h1 class="text-3xl md:text-5xl font-bold">The Whale of the Wild</h1>
+        <p class="text-lg text-cyan-400">核心家族关系图</p>
+    </header>
+
+    <div id="tree-container" class="tree-wrapper">
+        <!-- JS generates main tree here -->
+    </div>
+    
+    <div id="other-kinship-container">
+        <h2 class="section-title">同族其他成员</h2>
+        <div class="tree-wrapper">
+             <!-- JS generates other kinship trees here -->
+        </div>
+    </div>
+
+    <!-- Tooltip HTML -->
+    <div id="character-tooltip"></div>
+    
+    <!-- Banner HTML -->
+    <div id="banner-display" class="banner-container">
+        <div id="banner-content" class="banner">
+            <span id="banner-text" class="text-lg"></span>
+            <span id="close-banner" class="close-banner">&times;</span>
+        </div>
+    </div>
+
+    <script>
+        const characterData = {
+            siria: { name: 'Greatmother Siria', icon: '👵🏻', title: '智慧的女族长', gender: 'F', generation: 1, parent: null, story: '家族的最高领袖与首席寻路者。她是整个鲸群的智慧核心与历史的活字典。她的教诲，如“美是思想的食粮”，在维加最迷茫的时候给予了关键指引。' },
+            arctura: { name: 'Mother Arctura', icon: '👩🏻', title: '慈爱的猎手', gender: 'F', generation: 2, parent: 'siria', story: '维加和德内伯的母亲，一位强大的猎手。她在承受丧女之痛的同时，依然是孩子们心中温暖和力量的来源。' },
+            nova: { name: 'Aunt Nova', icon: '👩🏻', title: '支持的姐妹', gender: 'F', generation: 2, parent: 'siria', story: '阿克图拉的姐妹，阿奎拉的母亲。她在家族中扮演着重要的情感支持角色，体现了母系社会中姐妹间的紧密联系。' },
+            andromeda: { name: 'Andromeda', icon: '👧🏻', title: '失落的亲人', isLost: true, gender: 'F', generation: 2, parent: 'siria', story: '阿克图拉和诺娃最小的妹妹，在多年前的“捕猎季”被人类抓走，她的失踪是家族心中永远的痛。' },
+            rigel: { name: 'Great-uncle Rigel', icon: '👨🏻‍🦳', title: '坚定的守护者', gender: 'M', generation: 1.5, parent: 'siria', isSibling: true, story: '希莉亚的弟弟，家族的守护神。他沉默寡言但行动充满力量，背上的伤疤见证了他为保护家族而战的英勇过去。' },
+            antares: { name: 'Great-uncle Antares', icon: '👨🏻‍🦳', title: '警惕的守护者', gender: 'M', generation: 1.5, parent: 'siria', isSibling: true, story: '与参宿七一同行动的守护者，很可能是希莉亚老祖母的另一位兄弟。他在家族需要保护的关键时刻总是挺身而出。' },
+            vega: { name: 'Vega', icon: '👧🏻', title: '成长中的寻路者', isProtagonist: true, gender: 'F', generation: 3, parent: 'arctura', story: '故事的主角。在经历失去妹妹、与家族失散的重重考验后，她从一个冲动、迷茫的年轻虎鲸，成长为一名勇敢、有担当的真正领袖。' },
+            deneb: { name: 'Deneb', icon: '👦🏻', title: '忠诚的追随者', gender: 'M', generation: 3, parent: 'arctura', story: '维加的弟弟。他对姐姐怀有绝对的信任，是维加力量的重要来源。他在旅途中从一个需要被保护的孩子，成长为一个勇敢的少年。' },
+            aquila: { name: 'Aquila', icon: '👩🏻', title: '坚强的母亲', gender: 'F', generation: 3, parent: 'nova', story: '维加的表姐。她从一个处处表现优越的“模范生”，在灾难和饥饿的打击下，蜕变为一个为了孩子可以放弃一切的母亲。' },
+            capella: { name: 'Capella', icon: '🖤', title: '陨落的希望', isLost: true, gender: 'F', generation: 3, parent: 'arctura', story: '维加未曾谋面的妹妹，出生即夭折。她的死亡是维加离家和最终成长的直接原因。' },
+            altair: { name: 'Altair', icon: '👦🏻', title: '天真的幼鲸', gender: 'M', generation: 4, parent: 'aquila', story: '阿奎拉的幼子，代表了鲸群的未来与希望。在艰难的旅途中，他的存在是大家继续前行的动力之一。' },
+            io: { name: 'Io (Ancestor)', icon: '📜', title: '先祖', story: '“暖水食鲑社群”的一位祖先，在“大集会”时被提及，是 Ganymede 的曾祖母。' },
+            europa: { name: 'Europa', icon: '👩🏻', title: '同族成员', story: 'Io 的后代，Ganymede 的母亲，属于庞大的“暖水食鲑社群”。' },
+            ganymede: { name: 'Ganymede', icon: '👧🏻', title: '同族成员', story: 'Europa 的女儿，在“大集会”时向大家宣告自己的名字和血统。' },
+            titania: { name: 'Titania (Ancestor)', icon: '📜', title: '先祖', story: '“暖水食鲑社群”的另一位祖先，是 Mimas 的曾祖母。' },
+            phoebe: { name: 'Phoebe', icon: '👩🏻', title: '同族成员', story: 'Titania 的女儿，Mimas 的母亲。' },
+            mimas: { name: 'Mimas', icon: '👦🏻', title: '同族成员', story: 'Phoebe 的儿子，在“大集会”时宣告自己的名字。' }
+        };
+
+        function createNode(id) {
+            const char = characterData[id];
+            const node = document.createElement('div');
+            node.className = 'node';
+            node.dataset.id = id;
+            if (char.isProtagonist) node.classList.add('is-vega');
+            if (char.isLost) node.classList.add('is-lost');
+            const iconSpan = document.createElement('span');
+            iconSpan.className = 'node-icon';
+            iconSpan.textContent = char.icon;
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = char.name;
+            node.appendChild(iconSpan);
+            node.appendChild(nameSpan);
+            return node;
+        }
+
+        function createTreeHTML(structure) {
+            const li = document.createElement('li');
+            if (structure.label) {
+                const label = document.createElement('span');
+                label.className = 'relationship-label';
+                label.textContent = structure.label;
+                li.appendChild(label);
+            }
+            li.appendChild(createNode(structure.id));
+            if (structure.children && structure.children.length > 0) {
+                const ul = document.createElement('ul');
+                structure.children.forEach(child => ul.appendChild(createTreeHTML(child)));
+                li.appendChild(ul);
+            }
+            return li;
+        }
+
+        const mainFamilyTreeStructure = {
+            id: 'siria',
+            children: [
+                { id: 'arctura', label: '女儿', children: [
+                    { id: 'vega', label: '女儿' }, { id: 'deneb', label: '儿子' }, { id: 'capella', label: '女儿' }
+                ]},
+                { id: 'nova', label: '女儿', children: [
+                    { id: 'aquila', label: '女儿', children: [ { id: 'altair', label: '儿子' } ]}
+                ]},
+                { id: 'andromeda', label: '女儿' },
+                { id: 'rigel', label: '弟弟' },
+                { id: 'antares', label: '弟弟' }
+            ]
+        };
+        const mainTreeUl = document.createElement('ul');
+        mainTreeUl.className = 'tree';
+        mainTreeUl.appendChild(createTreeHTML(mainFamilyTreeStructure));
+        document.getElementById('tree-container').appendChild(mainTreeUl);
+        
+        const otherKinshipContainer = document.querySelector('#other-kinship-container .tree-wrapper');
+        const ioTree = createTreeHTML({ id: 'io', children: [{ id: 'europa', label: '后代', children: [{ id: 'ganymede', label: '女儿' }] }] });
+        const titaniaTree = createTreeHTML({ id: 'titania', children: [{ id: 'phoebe', label: '女儿', children: [{ id: 'mimas', label: '儿子' }] }] });
+        const ioTreeUl = document.createElement('ul');
+        ioTreeUl.className = 'tree';
+        ioTreeUl.appendChild(ioTree);
+        const titaniaTreeUl = document.createElement('ul');
+        titaniaTreeUl.className = 'tree ml-16';
+        titaniaTreeUl.appendChild(titaniaTree);
+        otherKinshipContainer.append(ioTreeUl, titaniaTreeUl);
+
+        const tooltip = document.getElementById('character-tooltip');
+        const bannerDisplay = document.getElementById('banner-display');
+        const bannerText = document.getElementById('banner-text');
+        const closeBannerBtn = document.getElementById('close-banner');
+        
+        let selectedCharacters = [];
+        let bannerTimeout;
+
+        document.querySelectorAll('.node').forEach(node => {
+            node.addEventListener('mouseenter', (e) => {
+                const id = node.dataset.id;
+                const char = characterData[id];
+                tooltip.innerHTML = `
+                    <div class="tooltip-icon">${char.icon}</div>
+                    <div>
+                        <h3 class="text-lg font-bold ${char.isProtagonist ? 'text-cyan-400' : ''}">${char.name}</h3>
+                        <p class="text-sm text-gray-400 mb-2">${char.title}</p>
+                        <p class="text-xs">${char.story}</p>
+                    </div>
+                `;
+                const rect = node.getBoundingClientRect();
+                const tooltipWidth = 300;
+                tooltip.style.left = `${rect.left + rect.width / 2 - tooltipWidth / 2}px`;
+                tooltip.style.top = `${rect.bottom + 10}px`;
+                tooltip.classList.add('visible');
+            });
+            node.addEventListener('mouseleave', () => {
+                tooltip.classList.remove('visible');
+            });
+
+            node.addEventListener('click', (e) => {
+                const id = node.dataset.id;
+                
+                // If two characters are already selected, a new click on any node resets everything and starts a new selection.
+                if (selectedCharacters.length >= 2) {
+                    hideBannerAndReset();
+                }
+
+                const isSelected = selectedCharacters.includes(id);
+
+                if (isSelected) {
+                    // Deselect if clicking an already selected node.
+                    selectedCharacters = selectedCharacters.filter(selectedId => selectedId !== id);
+                    node.classList.remove('selected');
+                } else {
+                    // Select the new node.
+                    selectedCharacters.push(id);
+                    node.classList.add('selected');
+                }
+
+                // If two nodes are now selected, show the relationship.
+                if (selectedCharacters.length === 2) {
+                    const relation = findRelationship(selectedCharacters[0], selectedCharacters[1]);
+                    showBanner(relation);
+                }
+            });
+        });
+        
+        function showBanner(relation) {
+            bannerText.textContent = relation;
+            bannerDisplay.style.display = 'flex';
+            // Timeout removed to make the banner and selection persistent.
+            // clearTimeout(bannerTimeout);
+            // bannerTimeout = setTimeout(hideBannerAndReset, 5000); 
+        }
+
+        function hideBannerAndReset() {
+            bannerDisplay.style.display = 'none';
+            resetSelection();
+        }
+
+        function resetSelection() {
+            selectedCharacters = [];
+            document.querySelectorAll('.node.selected').forEach(n => n.classList.remove('selected'));
+        }
+        
+        function findRelationship(id1, id2) {
+            if (id1 === id2) return "这是同一个人。";
+            const char1 = characterData[id1]; 
+            const char2 = characterData[id2];
+            let relation = `他们是远亲。`;
+
+            if (char1.parent === id2) relation = `${char2.name} 是 ${char1.name} 的母亲。`;
+            else if (char2.parent === id1) relation = `${char1.name} 是 ${char2.name} 的${char2.gender === 'F' ? '母亲' : '父亲'}。`;
+            else if (char1.parent === char2.parent && char1.parent) {
+                 if(char1.gender === 'F' && char2.gender === 'F') relation = `${char1.name} 和 ${char2.name} 是姐妹。`;
+                 else if(char1.gender === 'M' && char2.gender === 'M') relation = `${char1.name} 和 ${char2.name} 是兄弟。`;
+                 else relation = `${char1.name} 和 ${char2.name} 是兄妹/姐弟。`;
+            } else if ((char1.isSibling && char2.generation >= 3) || (char2.isSibling && char1.generation >= 3)) {
+                const grandNiece = char1.generation >= 3 ? char1 : char2;
+                const greatUncle = char1.isSibling ? char1 : char2;
+                relation = `${greatUncle.name} 是 ${grandNiece.name} 的舅公。`;
+            } else {
+                 const getPathToRoot = id => {
+                    const path = []; let current = characterData[id];
+                    while(current) { path.push(id); id = current.isSibling ? null : current.parent; current = characterData[id]; }
+                    return path;
+                };
+                const path1 = getPathToRoot(id1); const path2 = getPathToRoot(id2);
+                const lca = path1.find(id => path2.includes(id));
+                if (lca) {
+                    const lcaNode = characterData[lca];
+                    if (lca === id2) relation = `${char2.name} 是 ${char1.name} 的${char1.generation - lcaNode.generation === 1 ? '母亲' : '外祖母'}。`;
+                    else if (lca === id1) relation = `${char1.name} 是 ${char2.name} 的${char2.generation - lcaNode.generation === 1 ? '母亲' : '外祖母'}。`;
+                    else if(characterData[char1.parent]?.parent === characterData[char2.parent]?.parent) relation = `${char1.name} 和 ${char2.name} 是表姐妹/兄弟。`;
+                    else if(characterData[char1.parent] === characterData[char2.parent]?.parent) relation = `${char2.name} 是 ${char1.name} 的姨妈。`;
+                    else if(characterData[char2.parent] === characterData[char1.parent]?.parent) relation = `${char1.name} 是 ${char2.name} 的姨妈。`;
+                }
+            }
+            return relation;
+        }
+        closeBannerBtn.addEventListener('click', hideBannerAndReset);
+    </script>
+</body>
+</html>
+
